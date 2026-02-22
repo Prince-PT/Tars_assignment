@@ -47,12 +47,11 @@ export function DiscoverUsers() {
 
   const handleSendMessage = async (otherClerkId: string) => {
     if (!currentUser) return;
-    await getOrCreate({
-      myClerkId: currentUser.id,
+    const convId = await getOrCreate({
       otherClerkId,
     });
     setSelectedUser(null);
-    router.push("/messages");
+    router.push(`/messages?conv=${convId}`);
   };
 
   return (

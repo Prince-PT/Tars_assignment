@@ -8,15 +8,26 @@ import { mutation, query } from "./_generated/server";
 export const send = mutation({
   args: {
     conversationId: v.id("conversations"),
-    senderClerkId: v.string(),
     text: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+    if (
+      conversation.participantOneId !== identity.subject &&
+      conversation.participantTwoId !== identity.subject
+    ) {
+      throw new Error("Unauthorized");
+    }
+
     const now = Date.now();
 
     await ctx.db.insert("messages", {
       conversationId: args.conversationId,
-      senderClerkId: args.senderClerkId,
+      senderClerkId: identity.subject,
       text: args.text,
       createdAt: now,
     });
@@ -36,11 +47,24 @@ export const send = mutation({
 export const list = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+    if (
+      conversation.participantOneId !== identity.subject &&
+      conversation.participantTwoId !== identity.subject
+    ) {
+      throw new Error("Unauthorized");
+    }
+
     return await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>
         q.eq("conversationId", args.conversationId)
       )
+      .order("asc")
       .collect();
   },
 });

@@ -6,15 +6,18 @@ import { mutation, query } from "./_generated/server";
  */
 export const upsertUser = mutation({
   args: {
-    clerkId: v.string(),
     email: v.string(),
     name: v.string(),
     imageUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    const clerkId = identity.subject;
+
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
       .unique();
 
     if (existing) {
@@ -27,7 +30,7 @@ export const upsertUser = mutation({
     }
 
     return await ctx.db.insert("users", {
-      clerkId: args.clerkId,
+      clerkId,
       email: args.email,
       name: args.name,
       imageUrl: args.imageUrl,

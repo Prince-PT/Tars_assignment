@@ -45,7 +45,6 @@ export function MessageThread({
     try {
       await sendMessage({
         conversationId,
-        senderClerkId: user.id,
         text: trimmed,
       });
     } catch {

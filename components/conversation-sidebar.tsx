@@ -43,7 +43,7 @@ export function ConversationSidebar({
   const { user } = useUser();
   const conversations = useQuery(
     api.conversations.listForUser,
-    user ? { clerkId: user.id } : "skip"
+    user ? {} : "skip"
   );
   const allUsers = useQuery(api.users.getAllUsers);
   const getOrCreate = useMutation(api.conversations.getOrCreate);
@@ -61,7 +61,6 @@ export function ConversationSidebar({
   const handleStartChat = async (otherClerkId: string) => {
     if (!user) return;
     const convId = await getOrCreate({
-      myClerkId: user.id,
       otherClerkId,
     });
 

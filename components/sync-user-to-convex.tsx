@@ -23,7 +23,6 @@ export function SyncUserToConvex() {
       "Anonymous";
 
     upsertUser({
-      clerkId: user.id,
       email: user.primaryEmailAddress?.emailAddress ?? "",
       name,
       imageUrl: user.imageUrl,

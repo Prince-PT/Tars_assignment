@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useQuery } from "convex/react";
+import { useUser } from "@clerk/nextjs";
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ConversationSidebar } from "@/components/conversation-sidebar";
 import { MessageThread, EmptyThread } from "@/components/message-thread";
@@ -15,7 +19,25 @@ type ActiveConversation = {
 };
 
 export default function MessagesPage() {
-  const [active, setActive] = useState<ActiveConversation | null>(null);
+  const [manualActive, setManualActive] = useState<ActiveConversation | null>(null);
+  const searchParams = useSearchParams();
+  const { user } = useUser();
+  const convParam = searchParams.get("conv");
+
+  const linkedConv = useQuery(
+    api.conversations.getById,
+    convParam && user && !manualActive
+      ? { conversationId: convParam as Id<"conversations"> }
+      : "skip"
+  );
+
+  // Use manually selected conversation, or fall back to the one from the URL
+  const active: ActiveConversation | null = manualActive
+    ?? (linkedConv ? { _id: linkedConv._id, otherUser: linkedConv.otherUser } : null);
+
+  const handleSelect = (conv: ActiveConversation) => {
+    setManualActive(conv);
+  };
 
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border mx-4 mb-4 bg-background">
@@ -24,7 +46,7 @@ export default function MessagesPage() {
         <ConversationSidebar
           activeConversationId={active?._id ?? null}
           onSelect={(conv) =>
-            setActive({ _id: conv._id, otherUser: conv.otherUser })
+            handleSelect({ _id: conv._id, otherUser: conv.otherUser })
           }
         />
       </div>
@@ -37,13 +59,13 @@ export default function MessagesPage() {
             <ConversationSidebar
               activeConversationId={null}
               onSelect={(conv) =>
-                setActive({ _id: conv._id, otherUser: conv.otherUser })
+                handleSelect({ _id: conv._id, otherUser: conv.otherUser })
               }
             />
           ) : (
             <div className="flex-1 flex flex-col h-[calc(100vh-4rem)]">
               <button
-                onClick={() => setActive(null)}
+                onClick={() => setManualActive(null)}
                 className="px-4 py-2 text-sm text-primary hover:underline text-left border-b border-border"
               >
                 ← Back to conversations
