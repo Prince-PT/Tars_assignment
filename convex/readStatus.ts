@@ -69,14 +69,17 @@ export const unreadCounts = query({
 
       const lastReadAt = readRow?.lastReadAt ?? 0;
 
-      // Count messages after lastReadAt that were NOT sent by me
-      const messages = await ctx.db
+      // Only fetch messages created after lastReadAt using the index range,
+      // then filter out messages sent by the current user.
+      const unreadMessages = await ctx.db
         .query("messages")
-        .withIndex("by_conversation", (q) => q.eq("conversationId", conv._id))
+        .withIndex("by_conversation", (q) =>
+          q.eq("conversationId", conv._id).gt("createdAt", lastReadAt)
+        )
         .collect();
 
-      const unread = messages.filter(
-        (m) => m.senderClerkId !== clerkId && m.createdAt > lastReadAt
+      const unread = unreadMessages.filter(
+        (m) => m.senderClerkId !== clerkId
       ).length;
 
       if (unread > 0) {

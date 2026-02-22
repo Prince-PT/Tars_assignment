@@ -64,7 +64,9 @@ export const whoIsTyping = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    const myId = identity?.subject;
+    if (!identity) return [];
+
+    const myId = identity.subject;
 
     const rows = await ctx.db
       .query("typing")

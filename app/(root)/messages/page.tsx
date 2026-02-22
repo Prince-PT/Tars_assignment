@@ -34,13 +34,14 @@ export default function MessagesPage() {
 
 function MessagesContent() {
   const [manualActive, setManualActive] = useState<ActiveConversation | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const searchParams = useSearchParams();
   const { user } = useUser();
   const convParam = searchParams.get("conv");
 
   const linkedConv = useQuery(
     api.conversations.getById,
-    convParam && user && !manualActive
+    convParam && user && !manualActive && !dismissed
       ? { conversationId: convParam as Id<"conversations"> }
       : "skip"
   );
@@ -50,6 +51,7 @@ function MessagesContent() {
     ?? (linkedConv ? { _id: linkedConv._id, otherUser: linkedConv.otherUser } : null);
 
   const handleSelect = (conv: ActiveConversation) => {
+    setDismissed(false);
     setManualActive(conv);
   };
 
@@ -73,7 +75,7 @@ function MessagesContent() {
             <MessageThread
               conversationId={active._id}
               otherUser={active.otherUser}
-              onBack={() => setManualActive(null)}
+              onBack={() => { setManualActive(null); setDismissed(true); }}
             />
           </div>
         )}

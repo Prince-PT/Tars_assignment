@@ -1,7 +1,10 @@
+const domain = process.env.CLERK_ISSUER_DOMAIN;
+if (!domain) throw new Error("Missing CLERK_ISSUER_DOMAIN env var");
+
 export default {
   providers: [
     {
-      domain: "https://moved-doberman-74.clerk.accounts.dev",
+      domain,
       applicationID: "convex",
     },
   ],

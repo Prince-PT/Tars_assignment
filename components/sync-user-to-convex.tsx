@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser, useAuth } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
@@ -11,16 +11,10 @@ import { useEffect } from "react";
  */
 export function SyncUserToConvex() {
   const { user, isSignedIn } = useUser();
-  const { getToken } = useAuth();
   const upsertUser = useMutation(api.users.upsertUser);
 
   useEffect(() => {
     if (!isSignedIn || !user) return;
-
-    // Debug: check if Clerk can produce a "convex" JWT
-    getToken({ template: "convex" }).then((t) => {
-      console.log("[SyncUserToConvex] convex JWT:", t ? `${t.slice(0, 30)}...` : "NULL — JWT template 'convex' not configured in Clerk Dashboard");
-    });
 
     const name =
       user.fullName ||
@@ -33,7 +27,7 @@ export function SyncUserToConvex() {
       name,
       imageUrl: user.imageUrl,
     }).catch((err) => console.error("Failed to sync user to Convex:", err));
-  }, [isSignedIn, user, upsertUser, getToken]);
+  }, [isSignedIn, user, upsertUser]);
 
   return null;
 }

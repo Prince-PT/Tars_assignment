@@ -40,10 +40,10 @@ export function MessageThread({
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll when new messages arrive or typing indicator appears
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages?.length]);
+  }, [messages?.length, typingClerkIds.length]);
 
   // Mark conversation as read when opened or when new messages arrive
   useEffect(() => {
@@ -208,7 +208,6 @@ export function MessageThread({
                 </div>
               );
             })}
-            <div ref={bottomRef} />
           </div>
         )}
 
@@ -216,6 +215,7 @@ export function MessageThread({
         {typingClerkIds.length > 0 && (
           <TypingBubble name={otherUser.name} />
         )}
+        <div ref={bottomRef} />
       </ScrollArea>
 
       {/* Input */}
