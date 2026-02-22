@@ -11,6 +11,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
 import { SyncUserToConvex } from "@/components/sync-user-to-convex";
+import { PresenceProvider } from "@/components/presence-provider";
 import Link from "next/link";
 
 const geistSans = Geist({
@@ -42,6 +43,7 @@ export default function RootLayout({
         >
           <ConvexClientProvider>
             <SyncUserToConvex />
+            <PresenceProvider />
             <header className="flex items-center justify-between p-4 h-16 border-b border-border">
               <nav className="flex items-center gap-4">
                 <Link

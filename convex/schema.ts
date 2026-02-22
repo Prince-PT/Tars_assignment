@@ -26,4 +26,26 @@ export default defineSchema({
     text: v.string(),
     createdAt: v.number(),
   }).index("by_conversation", ["conversationId", "createdAt"]),
+
+  // ── Online presence ──
+  presence: defineTable({
+    clerkId: v.string(),
+    lastSeenAt: v.number(),
+  }).index("by_clerkId", ["clerkId"]),
+
+  // ── Typing indicators ──
+  typing: defineTable({
+    conversationId: v.id("conversations"),
+    clerkId: v.string(),
+    typingAt: v.number(),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_user_conversation", ["clerkId", "conversationId"]),
+
+  // ── Read status (tracks last-read timestamp per user per conversation) ──
+  readStatus: defineTable({
+    conversationId: v.id("conversations"),
+    clerkId: v.string(),
+    lastReadAt: v.number(),
+  }).index("by_user_conversation", ["clerkId", "conversationId"]),
 });
