@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
@@ -19,14 +19,29 @@ type ActiveConversation = {
 };
 
 export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+function MessagesContent() {
   const [manualActive, setManualActive] = useState<ActiveConversation | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const searchParams = useSearchParams();
   const { user } = useUser();
   const convParam = searchParams.get("conv");
 
   const linkedConv = useQuery(
     api.conversations.getById,
-    convParam && user && !manualActive
+    convParam && user && !manualActive && !dismissed
       ? { conversationId: convParam as Id<"conversations"> }
       : "skip"
   );
@@ -36,52 +51,50 @@ export default function MessagesPage() {
     ?? (linkedConv ? { _id: linkedConv._id, otherUser: linkedConv.otherUser } : null);
 
   const handleSelect = (conv: ActiveConversation) => {
+    setDismissed(false);
     setManualActive(conv);
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border mx-4 mb-4 bg-background">
-      {/* Sidebar */}
-      <div className="w-80 shrink-0 hidden sm:block">
-        <ConversationSidebar
-          activeConversationId={active?._id ?? null}
-          onSelect={(conv) =>
-            handleSelect({ _id: conv._id, otherUser: conv.otherUser })
-          }
-        />
-      </div>
-
-      {/* Mobile sidebar toggle + thread */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Mobile: show sidebar when no conversation active */}
-        <div className="sm:hidden">
-          {!active ? (
+    <>
+      {/* ── Mobile layout ── */}
+      <div className="sm:hidden h-[calc(100vh-4rem)]">
+        {!active ? (
+          /* Full-screen conversation list */
+          <div className="h-full">
             <ConversationSidebar
               activeConversationId={null}
               onSelect={(conv) =>
                 handleSelect({ _id: conv._id, otherUser: conv.otherUser })
               }
             />
-          ) : (
-            <div className="flex-1 flex flex-col h-[calc(100vh-4rem)]">
-              <button
-                onClick={() => setManualActive(null)}
-                className="px-4 py-2 text-sm text-primary hover:underline text-left border-b border-border"
-              >
-                ← Back to conversations
-              </button>
-              <div className="flex-1 min-h-0">
-                <MessageThread
-                  conversationId={active._id}
-                  otherUser={active.otherUser}
-                />
-              </div>
-            </div>
-          )}
+          </div>
+        ) : (
+          /* Full-screen chat */
+          <div className="flex flex-col h-full">
+            <MessageThread
+              conversationId={active._id}
+              otherUser={active.otherUser}
+              onBack={() => { setManualActive(null); setDismissed(true); }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop layout ── */}
+      <div className="hidden sm:flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border mx-4 mb-4 bg-background">
+        {/* Sidebar */}
+        <div className="w-80 shrink-0">
+          <ConversationSidebar
+            activeConversationId={active?._id ?? null}
+            onSelect={(conv) =>
+              handleSelect({ _id: conv._id, otherUser: conv.otherUser })
+            }
+          />
         </div>
 
-        {/* Desktop thread */}
-        <div className="hidden sm:flex flex-col flex-1 min-h-0">
+        {/* Chat area */}
+        <div className="flex flex-col flex-1 min-w-0">
           {active ? (
             <MessageThread
               conversationId={active._id}
@@ -92,6 +105,6 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

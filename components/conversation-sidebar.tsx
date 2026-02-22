@@ -16,9 +16,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, MessageCircle, SearchX } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { OnlineIndicator } from "@/components/online-indicator";
 
 type ConversationItem = {
   _id: Id<"conversations">;
@@ -50,6 +51,15 @@ export function ConversationSidebar({
 
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const onlineUserIds = useQuery(api.presence.onlineUsers) ?? [];
+  const unreadCounts = useQuery(
+    api.readStatus.unreadCounts,
+    user ? {} : "skip"
+  ) ?? {};
+  const typingConvIds = useQuery(
+    api.typing.typingConversations,
+    user ? {} : "skip"
+  ) ?? [];
 
   const filteredConversations = conversations?.filter((c) =>
     c.otherUser.name.toLowerCase().includes(search.toLowerCase())
@@ -139,15 +149,21 @@ export function ConversationSidebar({
                     "bg-accent text-accent-foreground"
                 )}
               >
-                <Avatar className="size-10 shrink-0">
-                  <AvatarImage
-                    src={conv.otherUser.imageUrl}
-                    alt={conv.otherUser.name}
+                <div className="relative">
+                  <Avatar className="size-10 shrink-0">
+                    <AvatarImage
+                      src={conv.otherUser.imageUrl}
+                      alt={conv.otherUser.name}
+                    />
+                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                      {conv.otherUser.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <OnlineIndicator
+                    online={onlineUserIds.includes(conv.otherUser.clerkId)}
+                    size="sm"
                   />
-                  <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                    {conv.otherUser.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-medium">
@@ -157,17 +173,61 @@ export function ConversationSidebar({
                       {formatTime(conv.lastMessageAt)}
                     </span>
                   </div>
-                  <p className="truncate text-xs text-muted-foreground mt-0.5">
-                    {conv.lastMessageText ?? "No messages yet"}
-                  </p>
+                  {typingConvIds.includes(conv._id) ? (
+                    <p className="truncate text-xs text-primary mt-0.5 italic flex items-center gap-1">
+                      <span className="inline-flex gap-0.5">
+                        <span className="animate-bounce size-1 rounded-full bg-primary [animation-delay:0ms]" />
+                        <span className="animate-bounce size-1 rounded-full bg-primary [animation-delay:150ms]" />
+                        <span className="animate-bounce size-1 rounded-full bg-primary [animation-delay:300ms]" />
+                      </span>
+                      typing…
+                    </p>
+                  ) : (
+                    <p className="truncate text-xs text-muted-foreground mt-0.5">
+                      {conv.lastMessageText ?? "No messages yet"}
+                    </p>
+                  )}
                 </div>
+                {/* Unread badge */}
+                {unreadCounts[conv._id] ? (
+                  <span className="shrink-0 flex items-center justify-center min-w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1.5">
+                    {unreadCounts[conv._id] > 99 ? "99+" : unreadCounts[conv._id]}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
+        ) : search ? (
+          <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
+            <SearchX className="size-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              No matching conversations
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              Try a different search term
+            </p>
+          </div>
         ) : (
-          <p className="text-center text-sm text-muted-foreground py-10 px-4">
-            {search ? "No matching conversations" : "No conversations yet"}
-          </p>
+          <div className="flex flex-col items-center gap-3 py-10 px-4 text-center">
+            <MessageCircle className="size-10 text-muted-foreground/40" />
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                No conversations yet
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                Start chatting by clicking the + button above
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1 gap-1.5"
+              onClick={() => setNewChatOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              New conversation
+            </Button>
+          </div>
         )}
       </ScrollArea>
 

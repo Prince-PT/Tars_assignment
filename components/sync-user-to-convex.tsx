@@ -26,7 +26,7 @@ export function SyncUserToConvex() {
       email: user.primaryEmailAddress?.emailAddress ?? "",
       name,
       imageUrl: user.imageUrl,
-    });
+    }).catch((err) => console.error("Failed to sync user to Convex:", err));
   }, [isSignedIn, user, upsertUser]);
 
   return null;
