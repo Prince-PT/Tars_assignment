@@ -42,11 +42,15 @@ export function MessageThread({
     if (!trimmed || !user) return;
 
     setText("");
-    await sendMessage({
-      conversationId,
-      senderClerkId: user.id,
-      text: trimmed,
-    });
+    try {
+      await sendMessage({
+        conversationId,
+        senderClerkId: user.id,
+        text: trimmed,
+      });
+    } catch {
+      setText(trimmed); // restore on failure
+    }
   };
 
   const formatTime = (ts: number) =>
