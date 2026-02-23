@@ -189,9 +189,9 @@ export function MessageThread({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[#0b141a]">
       {/* Chat header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#313d45] bg-[#202c33]">
         {onBack && (
           <Button
             variant="ghost"
@@ -252,7 +252,7 @@ export function MessageThread({
                 <div
                   className={cn(
                     "rounded-[7.5px] px-2.5 py-1.5 space-y-1",
-                    i % 3 === 0 ? "bg-card" : "bg-primary/40",
+                    i % 3 === 0 ? "bg-[#1f2c34]" : "bg-[#005c4b]/40",
                   )}
                   style={{ width: `${40 + (i % 3) * 15}%` }}
                 >
@@ -334,10 +334,10 @@ export function MessageThread({
                         className={cn(
                           "rounded-[7.5px] px-2.5 py-1.5 text-[14.2px] leading-4.75",
                           isDeleted
-                            ? "bg-muted text-muted-foreground"
+                            ? "bg-[#1a2630] text-[#8696a0]"
                             : isMe
-                              ? "bg-primary text-foreground"
-                              : "bg-card text-foreground",
+                              ? "bg-[#005c4b] text-[#e9edef]"
+                              : "bg-[#1f2c34] text-[#e9edef]",
                           !isDeleted && !sameSenderAsPrev && isMe && "rounded-tr-[3px]",
                           !isDeleted && !sameSenderAsPrev && !isMe && "rounded-tl-[3px]",
                         )}
@@ -361,8 +361,8 @@ export function MessageThread({
                             isDeleted
                               ? "text-muted-foreground/50"
                               : isMe
-                                ? "text-primary-foreground/60"
-                                : "text-muted-foreground",
+                                ? "text-[#ffffff99]"
+                                : "text-[#8696a0]",
                           )}
                         >
                           {formatTimestamp(msg.createdAt)}
@@ -398,8 +398,8 @@ export function MessageThread({
         {failedMessages.map((fm) => (
           <div key={fm.id} className="flex justify-end mb-2">
             <div className="max-w-[65%]">
-              <div className="rounded-[7.5px] rounded-tr-[3px] px-2.5 py-1.5 text-[14.2px] leading-4.75 bg-primary border-l-2 border-destructive/60">
-                <p className="text-foreground">{fm.text}</p>
+              <div className="rounded-[7.5px] rounded-tr-[3px] px-2.5 py-1.5 text-[14.2px] leading-4.75 bg-[#005c4b] border-l-2 border-destructive/60">
+                <p className="text-[#e9edef]">{fm.text}</p>
                 <div className="flex items-center justify-end gap-3 mt-2 pt-1.5 border-t border-destructive/10">
                   <span className="inline-flex items-center gap-1 text-[11px] text-destructive/80">
                     <AlertCircle className="size-3" />
