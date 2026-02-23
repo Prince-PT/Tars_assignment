@@ -11,7 +11,9 @@ export function TypingBubble({ name }: { name: string }) {
         <span className="size-[5px] rounded-full bg-[#8696a0] animate-bounce [animation-delay:150ms]" />
         <span className="size-[5px] rounded-full bg-[#8696a0] animate-bounce [animation-delay:300ms]" />
       </div>
-      <span className="text-xs text-[#8696a0]">{name} is typing</span>
+      <span className="text-xs text-[#8696a0]">
+        {name}{name.includes(",") ? " are" : " is"} typing
+      </span>
     </div>
   );
 }

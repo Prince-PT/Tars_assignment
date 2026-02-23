@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { isParticipant } from "./helpers";
+import { isMember } from "./helpers";
 
 /**
  * Send a message in a conversation. Also updates the conversation's
@@ -17,7 +17,7 @@ export const send = mutation({
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) throw new Error("Conversation not found");
-    if (!isParticipant(conversation, identity.subject)) {
+    if (!(await isMember(ctx, args.conversationId, identity.subject))) {
       throw new Error("Unauthorized");
     }
 
@@ -85,7 +85,7 @@ export const list = query({
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) throw new Error("Conversation not found");
-    if (!isParticipant(conversation, identity.subject)) {
+    if (!(await isMember(ctx, args.conversationId, identity.subject))) {
       throw new Error("Unauthorized");
     }
 

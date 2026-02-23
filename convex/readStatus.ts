@@ -43,35 +43,15 @@ export const unreadCounts = query({
 
     const clerkId = identity.subject;
 
-    // Get all conversations for this user
-    const asP1 = await ctx.db
-      .query("conversations")
-      .withIndex("by_participant", (q) => q.eq("participantOneId", clerkId))
-      .collect();
-
-    const asP2 = await ctx.db
-      .query("conversations")
-      .withIndex("by_participantTwo", (q) => q.eq("participantTwoId", clerkId))
-      .collect();
-
-    // Group conversations: look up via conversationMembers index
+    // Unified: get all conversations via membership table
     const myMemberships = await ctx.db
       .query("conversationMembers")
       .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
       .collect();
-    const myGroups = (
-      await Promise.all(
-        myMemberships.map((m) => ctx.db.get(m.conversationId))
-      )
-    ).filter((c): c is NonNullable<typeof c> => c != null && c.isGroup === true);
 
-    // Deduplicate across all three sources
-    const seen = new Set<string>();
-    const allConvs = [...asP1, ...asP2, ...myGroups].filter((c) => {
-      if (seen.has(c._id)) return false;
-      seen.add(c._id);
-      return true;
-    });
+    const allConvs = (
+      await Promise.all(myMemberships.map((m) => ctx.db.get(m.conversationId)))
+    ).filter((c): c is NonNullable<typeof c> => c != null);
 
     const counts: Record<string, number> = {};
 

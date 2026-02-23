@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { isParticipant } from "./helpers";
+import { isMember } from "./helpers";
 
 /**
  * Get or create a 1-on-1 conversation between the authenticated user and another user.
@@ -24,12 +24,41 @@ export const getOrCreate = mutation({
       )
       .unique();
 
-    if (existing) return existing._id;
+    if (existing) {
+      // Ensure membership rows exist (guards against pre-migration DMs)
+      for (const clerkId of [myClerkId, args.otherClerkId]) {
+        const row = await ctx.db
+          .query("conversationMembers")
+          .withIndex("by_conversation_member", (q) =>
+            q.eq("conversationId", existing._id).eq("clerkId", clerkId),
+          )
+          .first();
+        if (!row) {
+          await ctx.db.insert("conversationMembers", {
+            conversationId: existing._id,
+            clerkId,
+          });
+        }
+      }
+      return existing._id;
+    }
 
-    return await ctx.db.insert("conversations", {
+    const convId = await ctx.db.insert("conversations", {
       participantOneId: p1,
       participantTwoId: p2,
     });
+
+    // Insert membership rows for the new DM
+    await ctx.db.insert("conversationMembers", {
+      conversationId: convId,
+      clerkId: myClerkId,
+    });
+    await ctx.db.insert("conversationMembers", {
+      conversationId: convId,
+      clerkId: args.otherClerkId,
+    });
+
+    return convId;
   },
 });
 
@@ -81,7 +110,6 @@ export const createGroup = mutation({
     const convId = await ctx.db.insert("conversations", {
       isGroup: true,
       groupName: args.name.trim(),
-      participantIds: allMembers,
     });
 
     // Insert membership rows for efficient lookups
@@ -106,105 +134,75 @@ export const listForUser = query({
 
     const clerkId = identity.subject;
 
-    // 1-on-1 conversations: user appears as participantOneId or participantTwoId
-    const asP1 = await ctx.db
-      .query("conversations")
-      .withIndex("by_participant", (q) =>
-        q.eq("participantOneId", clerkId)
-      )
-      .collect();
-
-    const asP2 = await ctx.db
-      .query("conversations")
-      .withIndex("by_participantTwo", (q) =>
-        q.eq("participantTwoId", clerkId)
-      )
-      .collect();
-
-    // Group conversations: look up via conversationMembers index
+    // Unified: get all conversations via membership table (single code path)
     const myMemberships = await ctx.db
       .query("conversationMembers")
       .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
       .collect();
-    const myGroups = (
-      await Promise.all(
-        myMemberships.map((m) => ctx.db.get(m.conversationId))
-      )
-    ).filter((c): c is NonNullable<typeof c> => c != null && c.isGroup === true);
 
-    // Deduplicate across all three sources
-    const seen = new Set<string>();
-    const all = [...asP1, ...asP2, ...myGroups].filter((c) => {
-      if (seen.has(c._id)) return false;
-      seen.add(c._id);
-      return true;
-    });
+    const conversations = (
+      await Promise.all(myMemberships.map((m) => ctx.db.get(m.conversationId)))
+    ).filter((c): c is NonNullable<typeof c> => c != null);
 
     // Sort by most recent message, conversations without messages go last.
-    all.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
+    conversations.sort(
+      (a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0),
+    );
 
-    // Enrich with user profiles
+    // Enrich with member profiles
     const enriched = await Promise.all(
-      all.map(async (conv) => {
-        if (conv.isGroup && conv.participantIds) {
-          // Group conversation
-          const members = await Promise.all(
-            conv.participantIds
-              .filter((id) => id !== clerkId)
-              .slice(0, 5) // limit lookups
-              .map(async (id) => {
-                const u = await ctx.db
-                  .query("users")
-                  .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
-                  .unique();
-                return u
-                  ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
-                  : { clerkId: id, name: "Unknown", imageUrl: undefined };
-              })
-          );
+      conversations.map(async (conv) => {
+        const memberRows = await ctx.db
+          .query("conversationMembers")
+          .withIndex("by_conversation", (q) =>
+            q.eq("conversationId", conv._id),
+          )
+          .collect();
 
+        const otherClerkIds = memberRows
+          .map((m) => m.clerkId)
+          .filter((id) => id !== clerkId);
+
+        const otherMembers = await Promise.all(
+          otherClerkIds.slice(0, 5).map(async (id) => {
+            const u = await ctx.db
+              .query("users")
+              .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
+              .unique();
+            return u
+              ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
+              : { clerkId: id, name: "Unknown", imageUrl: undefined };
+          }),
+        );
+
+        if (conv.isGroup) {
           return {
             _id: conv._id,
             isGroup: true as const,
             groupName: conv.groupName ?? "Group",
-            memberCount: conv.participantIds.length,
-            members,
-            // Keep otherUser for backward compat (first other member)
-            otherUser: members[0] ?? { clerkId: "", name: "Group", imageUrl: undefined },
+            memberCount: memberRows.length,
+            members: otherMembers,
+            otherUser: otherMembers[0] ?? {
+              clerkId: "unknown",
+              name: "Group",
+              imageUrl: undefined,
+            },
             lastMessageText: conv.lastMessageText,
             lastMessageAt: conv.lastMessageAt,
           };
         }
 
-        // 1-on-1 conversation
-        const otherClerkId =
-          conv.participantOneId === clerkId
-            ? conv.participantTwoId
-            : conv.participantOneId;
-
-        if (!otherClerkId) {
-          return null; // skip malformed row
-        }
-
-        const otherUser = await ctx.db
-          .query("users")
-          .withIndex("by_clerkId", (q) => q.eq("clerkId", otherClerkId))
-          .unique();
+        // 1-on-1 conversation — skip if no other member found
+        if (otherMembers.length === 0) return null;
 
         return {
           _id: conv._id,
           isGroup: false as const,
-          otherUser: otherUser
-            ? {
-                clerkId: otherUser.clerkId,
-                name: otherUser.name,
-                imageUrl: otherUser.imageUrl,
-              }
-            : { clerkId: otherClerkId, name: "Unknown", imageUrl: undefined },
+          otherUser: otherMembers[0],
           lastMessageText: conv.lastMessageText,
           lastMessageAt: conv.lastMessageAt,
         };
-      })
+      }),
     );
 
     return enriched.filter((c): c is NonNullable<typeof c> => c != null);
@@ -224,60 +222,56 @@ export const getById = query({
     const conv = await ctx.db.get(args.conversationId);
     if (!conv) return null;
 
-    if (!isParticipant(conv, clerkId)) {
+    if (!(await isMember(ctx, args.conversationId, clerkId))) {
       throw new Error("Unauthorized");
     }
 
-    if (conv.isGroup && conv.participantIds) {
-      const members = await Promise.all(
-        conv.participantIds
-          .filter((id) => id !== clerkId)
-          .slice(0, 5)
-          .map(async (id) => {
-            const u = await ctx.db
-              .query("users")
-              .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
-              .unique();
-            return u
-              ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
-              : { clerkId: id, name: "Unknown", imageUrl: undefined };
-          })
-      );
+    // Get members from the unified membership table
+    const memberRows = await ctx.db
+      .query("conversationMembers")
+      .withIndex("by_conversation", (q) => q.eq("conversationId", conv._id))
+      .collect();
 
+    const otherClerkIds = memberRows
+      .map((m) => m.clerkId)
+      .filter((id) => id !== clerkId);
+
+    const otherMembers = await Promise.all(
+      otherClerkIds.slice(0, 5).map(async (id) => {
+        const u = await ctx.db
+          .query("users")
+          .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
+          .unique();
+        return u
+          ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
+          : { clerkId: id, name: "Unknown", imageUrl: undefined };
+      }),
+    );
+
+    if (conv.isGroup) {
       return {
         _id: conv._id,
         isGroup: true as const,
         groupName: conv.groupName ?? "Group",
-        memberCount: conv.participantIds.length,
-        members,
-        otherUser: members[0] ?? { clerkId: "", name: "Group", imageUrl: undefined },
+        memberCount: memberRows.length,
+        members: otherMembers,
+        otherUser: otherMembers[0] ?? {
+          clerkId: "unknown",
+          name: "Group",
+          imageUrl: undefined,
+        },
         lastMessageText: conv.lastMessageText,
         lastMessageAt: conv.lastMessageAt,
       };
     }
 
-    const otherClerkId =
-      conv.participantOneId === clerkId
-        ? conv.participantTwoId
-        : conv.participantOneId;
-
-    if (!otherClerkId) return null;
-
-    const otherUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", otherClerkId))
-      .unique();
+    // 1-on-1 — if no other member, the conversation is malformed
+    if (otherMembers.length === 0) return null;
 
     return {
       _id: conv._id,
       isGroup: false as const,
-      otherUser: otherUser
-        ? {
-            clerkId: otherUser.clerkId,
-            name: otherUser.name,
-            imageUrl: otherUser.imageUrl,
-          }
-        : { clerkId: otherClerkId, name: "Unknown", imageUrl: undefined },
+      otherUser: otherMembers[0],
       lastMessageText: conv.lastMessageText,
       lastMessageAt: conv.lastMessageAt,
     };

@@ -11,19 +11,13 @@ export default defineSchema({
   }).index("by_clerkId", ["clerkId"]),
 
   conversations: defineTable({
-    participantOneId: v.optional(v.string()), // clerkId (1-on-1 only)
-    participantTwoId: v.optional(v.string()), // clerkId (1-on-1 only)
+    participantOneId: v.optional(v.string()), // clerkId – DM dedup only
+    participantTwoId: v.optional(v.string()), // clerkId – DM dedup only
     lastMessageText: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
-    // ── Group chat fields ──
     isGroup: v.optional(v.boolean()),
     groupName: v.optional(v.string()),
-    participantIds: v.optional(v.array(v.string())), // all member clerkIds
-  })
-    .index("by_participant", ["participantOneId"])
-    .index("by_participantTwo", ["participantTwoId"])
-    .index("by_pair", ["participantOneId", "participantTwoId"])
-    .index("by_isGroup", ["isGroup"]),
+  }).index("by_pair", ["participantOneId", "participantTwoId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
@@ -76,5 +70,6 @@ export default defineSchema({
     clerkId: v.string(),
   })
     .index("by_clerkId", ["clerkId"])
-    .index("by_conversation", ["conversationId"]),
+    .index("by_conversation", ["conversationId"])
+    .index("by_conversation_member", ["conversationId", "clerkId"]),
 });
