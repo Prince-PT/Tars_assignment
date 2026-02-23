@@ -24,7 +24,24 @@ export const getOrCreate = mutation({
       )
       .unique();
 
-    if (existing) return existing._id;
+    if (existing) {
+      // Ensure membership rows exist (guards against pre-migration DMs)
+      for (const clerkId of [myClerkId, args.otherClerkId]) {
+        const row = await ctx.db
+          .query("conversationMembers")
+          .withIndex("by_conversation_member", (q) =>
+            q.eq("conversationId", existing._id).eq("clerkId", clerkId),
+          )
+          .first();
+        if (!row) {
+          await ctx.db.insert("conversationMembers", {
+            conversationId: existing._id,
+            clerkId,
+          });
+        }
+      }
+      return existing._id;
+    }
 
     const convId = await ctx.db.insert("conversations", {
       participantOneId: p1,
@@ -166,7 +183,7 @@ export const listForUser = query({
             memberCount: memberRows.length,
             members: otherMembers,
             otherUser: otherMembers[0] ?? {
-              clerkId: "",
+              clerkId: "unknown",
               name: "Group",
               imageUrl: undefined,
             },
@@ -175,22 +192,20 @@ export const listForUser = query({
           };
         }
 
-        // 1-on-1 conversation
+        // 1-on-1 conversation — skip if no other member found
+        if (otherMembers.length === 0) return null;
+
         return {
           _id: conv._id,
           isGroup: false as const,
-          otherUser: otherMembers[0] ?? {
-            clerkId: "",
-            name: "Unknown",
-            imageUrl: undefined,
-          },
+          otherUser: otherMembers[0],
           lastMessageText: conv.lastMessageText,
           lastMessageAt: conv.lastMessageAt,
         };
       }),
     );
 
-    return enriched;
+    return enriched.filter((c): c is NonNullable<typeof c> => c != null);
   },
 });
 
@@ -241,7 +256,7 @@ export const getById = query({
         memberCount: memberRows.length,
         members: otherMembers,
         otherUser: otherMembers[0] ?? {
-          clerkId: "",
+          clerkId: "unknown",
           name: "Group",
           imageUrl: undefined,
         },
@@ -250,14 +265,13 @@ export const getById = query({
       };
     }
 
+    // 1-on-1 — if no other member, the conversation is malformed
+    if (otherMembers.length === 0) return null;
+
     return {
       _id: conv._id,
       isGroup: false as const,
-      otherUser: otherMembers[0] ?? {
-        clerkId: "",
-        name: "Unknown",
-        imageUrl: undefined,
-      },
+      otherUser: otherMembers[0],
       lastMessageText: conv.lastMessageText,
       lastMessageAt: conv.lastMessageAt,
     };

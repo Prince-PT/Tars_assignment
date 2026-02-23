@@ -51,6 +51,7 @@ export function MessageThread({
   const markRead = useMutation(api.readStatus.markRead);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isNearBottom = useRef(true);
   const [showNewMsgBtn, setShowNewMsgBtn] = useState(false);
   const prevMsgCount = useRef(0);
@@ -81,13 +82,16 @@ export function MessageThread({
   // Track whether the user is near the bottom via IntersectionObserver
   useEffect(() => {
     const el = bottomRef.current;
-    if (!el) return;
+    const scrollContainer = scrollAreaRef.current?.querySelector(
+      "[data-slot='scroll-area-viewport']",
+    ) as HTMLElement | null;
+    if (!el || !scrollContainer) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         isNearBottom.current = entry.isIntersecting;
         if (entry.isIntersecting) setShowNewMsgBtn(false);
       },
-      { threshold: 0, rootMargin: "0px 0px 150px 0px" },
+      { root: scrollContainer, threshold: 0, rootMargin: "0px 0px 150px 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -288,7 +292,7 @@ export function MessageThread({
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 overflow-hidden px-3 py-1">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-hidden px-3 py-1">
         {messages === undefined ? (
           /* Skeleton loaders while loading */
           <div className="space-y-4 py-4">
@@ -491,7 +495,11 @@ export function MessageThread({
         ))}
 
         {/* Typing indicator */}
-        {typingClerkIds.length > 0 && <TypingBubble name={otherUser.name} />}
+        {typingClerkIds.length > 0 && (
+          <TypingBubble
+            name={typingClerkIds.map((id) => getSenderName(id)).join(", ")}
+          />
+        )}
         <div ref={bottomRef} className="h-1 w-full" />
       </ScrollArea>
 
