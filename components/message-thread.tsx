@@ -133,6 +133,22 @@ export function MessageThread({
     setFailedMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteMessage = useCallback(
+    async (messageId: Id<"messages">) => {
+      if (!window.confirm("Delete this message? This can't be undone.")) return;
+      setDeleteError(null);
+      try {
+        await deleteMessage({ messageId });
+      } catch {
+        setDeleteError(messageId);
+        setTimeout(() => setDeleteError(null), 3000);
+      }
+    },
+    [deleteMessage],
+  );
+
   const formatTimestamp = (ts: number) => {
     const date = new Date(ts);
     return date.toLocaleTimeString("en-US", {
@@ -236,7 +252,7 @@ export function MessageThread({
                 <div
                   className={cn(
                     "rounded-[7.5px] px-2.5 py-1.5 space-y-1",
-                    i % 3 === 0 ? "bg-[#202c33]" : "bg-[#005c4b]/40",
+                    i % 3 === 0 ? "bg-card" : "bg-primary/40",
                   )}
                   style={{ width: `${40 + (i % 3) * 15}%` }}
                 >
@@ -286,7 +302,7 @@ export function MessageThread({
                   {/* Date separator */}
                   {shouldShowDateSeparator(i) && (
                     <div className="flex justify-center my-3">
-                      <span className="text-[12.5px] text-[#e9edef99] bg-[#182229] px-3 py-1 rounded-[7.5px] shadow-sm">
+                      <span className="text-[12.5px] text-muted-foreground bg-muted px-3 py-1 rounded-[7.5px] shadow-sm">
                         {formatDateSeparator(msg.createdAt)}
                       </span>
                     </div>
@@ -301,11 +317,16 @@ export function MessageThread({
                     {/* Delete button — appears on hover, positioned beside the bubble */}
                     {isMe && !isDeleted && (
                       <button
-                        onClick={() => deleteMessage({ messageId: msg._id })}
+                        onClick={() => handleDeleteMessage(msg._id)}
                         className="opacity-0 group-hover/msg:opacity-100 transition-opacity mb-2 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground/50 hover:text-destructive"
                         title="Delete message"
                       >
                         <Trash2 className="size-3.5" />
+                        {deleteError === msg._id && (
+                          <span className="absolute -top-6 right-0 text-[10px] text-destructive bg-card px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
+                            Failed to delete
+                          </span>
+                        )}
                       </button>
                     )}
                     <div className="max-w-[65%]">
@@ -313,22 +334,22 @@ export function MessageThread({
                         className={cn(
                           "rounded-[7.5px] px-2.5 py-1.5 text-[14.2px] leading-4.75",
                           isDeleted
-                            ? "bg-[#1a2930] text-[#8696a0]"
+                            ? "bg-muted text-muted-foreground"
                             : isMe
-                              ? "bg-[#005c4b] text-[#e9edef]"
-                              : "bg-[#202c33] text-[#e9edef]",
+                              ? "bg-primary text-foreground"
+                              : "bg-card text-foreground",
                           !isDeleted && !sameSenderAsPrev && isMe && "rounded-tr-[3px]",
                           !isDeleted && !sameSenderAsPrev && !isMe && "rounded-tl-[3px]",
                         )}
                       >
                         {/* Sender name in group chats */}
                         {isGroup && !isMe && !isDeleted && !sameSenderAsPrev && (
-                          <p className="text-[12.8px] font-medium text-[#00a884] mb-0.5">
+                          <p className="text-[12.8px] font-medium text-primary mb-0.5">
                             {getSenderName(msg.senderClerkId)}
                           </p>
                         )}
                         {isDeleted ? (
-                          <p className="italic text-[#8696a0] text-[13px]">
+                          <p className="italic text-muted-foreground text-[13px]">
                             This message was deleted
                           </p>
                         ) : (
@@ -338,10 +359,10 @@ export function MessageThread({
                           className={cn(
                             "text-[11px] mt-0.5 text-right select-none leading-none",
                             isDeleted
-                              ? "text-[#8696a0]/50"
+                              ? "text-muted-foreground/50"
                               : isMe
-                                ? "text-white/60"
-                                : "text-[#8696a0]",
+                                ? "text-primary-foreground/60"
+                                : "text-muted-foreground",
                           )}
                         >
                           {formatTimestamp(msg.createdAt)}
@@ -377,7 +398,7 @@ export function MessageThread({
         {failedMessages.map((fm) => (
           <div key={fm.id} className="flex justify-end mb-2">
             <div className="max-w-[65%]">
-              <div className="rounded-[7.5px] rounded-tr-[3px] px-2.5 py-1.5 text-[14.2px] leading-4.75 bg-[#005c4b] border-l-2 border-red-400/60">
+              <div className="rounded-[7.5px] rounded-tr-[3px] px-2.5 py-1.5 text-[14.2px] leading-4.75 bg-primary border-l-2 border-destructive/60">
                 <p className="text-foreground">{fm.text}</p>
                 <div className="flex items-center justify-end gap-3 mt-2 pt-1.5 border-t border-destructive/10">
                   <span className="inline-flex items-center gap-1 text-[11px] text-destructive/80">

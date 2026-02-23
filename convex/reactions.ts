@@ -9,14 +9,6 @@ const EMOJI_VALUES = v.union(
   v.literal("angry"),
 );
 
-const EMOJI_DISPLAY: Record<string, string> = {
-  thumbsup: "👍",
-  heart: "❤️",
-  laugh: "😂",
-  sad: "😢",
-  angry: "😠",
-};
-
 /**
  * Toggle a reaction on a message.
  * If the user already reacted with this emoji, remove it; otherwise add it.
@@ -51,16 +43,6 @@ export const toggle = mutation({
         clerkId: identity.subject,
         emoji: args.emoji,
       });
-
-      // Update sidebar preview to show the reaction
-      const message = await ctx.db.get(args.messageId);
-      if (message) {
-        const emojiChar = EMOJI_DISPLAY[args.emoji] ?? args.emoji;
-        await ctx.db.patch(message.conversationId, {
-          lastMessageText: `Reacted ${emojiChar}`,
-          lastMessageAt: Date.now(),
-        });
-      }
     }
   },
 });

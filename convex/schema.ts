@@ -11,8 +11,8 @@ export default defineSchema({
   }).index("by_clerkId", ["clerkId"]),
 
   conversations: defineTable({
-    participantOneId: v.string(), // clerkId (used for 1-on-1)
-    participantTwoId: v.string(), // clerkId (used for 1-on-1)
+    participantOneId: v.optional(v.string()), // clerkId (1-on-1 only)
+    participantTwoId: v.optional(v.string()), // clerkId (1-on-1 only)
     lastMessageText: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
     // ── Group chat fields ──
@@ -69,4 +69,12 @@ export default defineSchema({
   })
     .index("by_message", ["messageId"])
     .index("by_message_user", ["messageId", "clerkId"]),
+
+  // ── Conversation membership (for efficient group lookups) ──
+  conversationMembers: defineTable({
+    conversationId: v.id("conversations"),
+    clerkId: v.string(),
+  })
+    .index("by_clerkId", ["clerkId"])
+    .index("by_conversation", ["conversationId"]),
 });

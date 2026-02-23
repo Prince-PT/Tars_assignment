@@ -54,14 +54,16 @@ export const unreadCounts = query({
       .withIndex("by_participantTwo", (q) => q.eq("participantTwoId", clerkId))
       .collect();
 
-    // Group conversations: query all groups and filter by participantIds
-    const allGroups = await ctx.db
-      .query("conversations")
-      .withIndex("by_isGroup", (q) => q.eq("isGroup", true))
+    // Group conversations: look up via conversationMembers index
+    const myMemberships = await ctx.db
+      .query("conversationMembers")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
       .collect();
-    const myGroups = allGroups.filter(
-      (c) => c.participantIds?.includes(clerkId)
-    );
+    const myGroups = (
+      await Promise.all(
+        myMemberships.map((m) => ctx.db.get(m.conversationId))
+      )
+    ).filter((c): c is NonNullable<typeof c> => c != null && c.isGroup === true);
 
     // Deduplicate across all three sources
     const seen = new Set<string>();

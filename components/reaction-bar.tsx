@@ -40,18 +40,32 @@ export function ReactionBar({ messageId, reactions, isMe }: ReactionBarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen]);
 
-  const handleToggle = (emoji: EmojiKey) => {
-    toggleReaction({ messageId, emoji });
-    setPickerOpen(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = async (emoji: EmojiKey) => {
+    setError(null);
+    try {
+      await toggleReaction({ messageId, emoji });
+      setPickerOpen(false);
+    } catch (err) {
+      console.error(`Failed to toggle reaction ${emoji} on ${messageId}:`, err);
+      setError(`Couldn't react ${EMOJI_MAP[emoji]}`);
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   return (
     <div
       className={cn(
-        "flex items-center gap-1 flex-wrap",
+        "flex items-center gap-1 flex-wrap relative",
         isMe ? "justify-end" : "justify-start",
       )}
     >
+      {error && (
+        <span className="absolute -top-5 left-0 text-[10px] text-destructive bg-card px-2 py-0.5 rounded shadow-sm whitespace-nowrap z-50">
+          {error}
+        </span>
+      )}
       {/* Existing reactions */}
       {reactions.map((r) => (
         <button

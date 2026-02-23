@@ -32,6 +32,8 @@ export const getOrCreate = mutation({
   },
 });
 
+const MAX_GROUP_MEMBERS = 50;
+
 /**
  * Create a group conversation with multiple members and a name.
  */
@@ -52,21 +54,51 @@ export const createGroup = mutation({
       new Set([myClerkId, ...args.memberClerkIds])
     ).sort();
 
-    return await ctx.db.insert("conversations", {
-      participantOneId: allMembers[0],
-      participantTwoId: allMembers[1],
+    // Enforce max group size
+    if (allMembers.length > MAX_GROUP_MEMBERS) {
+      throw new Error(
+        `Group cannot exceed ${MAX_GROUP_MEMBERS} members (got ${allMembers.length})`
+      );
+    }
+
+    // Validate all member IDs exist in the users table
+    const foundUsers = await Promise.all(
+      allMembers.map((clerkId) =>
+        ctx.db
+          .query("users")
+          .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
+          .unique()
+      )
+    );
+    const missingIds = allMembers.filter((_, i) => !foundUsers[i]);
+    if (missingIds.length > 0) {
+      throw new Error(
+        `The following member IDs were not found: ${missingIds.join(", ")}`
+      );
+    }
+
+    const convId = await ctx.db.insert("conversations", {
       isGroup: true,
       groupName: args.name.trim(),
       participantIds: allMembers,
     });
+
+    // Insert membership rows for efficient lookups
+    await Promise.all(
+      allMembers.map((clerkId) =>
+        ctx.db.insert("conversationMembers", { conversationId: convId, clerkId })
+      )
+    );
+
+    return convId;
   },
 });
 
 /** Helper: check if a clerkId is a participant of a conversation */
 function isParticipant(
   conv: {
-    participantOneId: string;
-    participantTwoId: string;
+    participantOneId?: string;
+    participantTwoId?: string;
     isGroup?: boolean;
     participantIds?: string[];
   },
@@ -104,14 +136,16 @@ export const listForUser = query({
       )
       .collect();
 
-    // Group conversations: query all groups and filter by participantIds
-    const allGroups = await ctx.db
-      .query("conversations")
-      .withIndex("by_isGroup", (q) => q.eq("isGroup", true))
+    // Group conversations: look up via conversationMembers index
+    const myMemberships = await ctx.db
+      .query("conversationMembers")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
       .collect();
-    const myGroups = allGroups.filter(
-      (c) => c.participantIds?.includes(clerkId)
-    );
+    const myGroups = (
+      await Promise.all(
+        myMemberships.map((m) => ctx.db.get(m.conversationId))
+      )
+    ).filter((c): c is NonNullable<typeof c> => c != null && c.isGroup === true);
 
     // Deduplicate across all three sources
     const seen = new Set<string>();
@@ -163,6 +197,10 @@ export const listForUser = query({
             ? conv.participantTwoId
             : conv.participantOneId;
 
+        if (!otherClerkId) {
+          return null; // skip malformed row
+        }
+
         const otherUser = await ctx.db
           .query("users")
           .withIndex("by_clerkId", (q) => q.eq("clerkId", otherClerkId))
@@ -184,7 +222,7 @@ export const listForUser = query({
       })
     );
 
-    return enriched;
+    return enriched.filter((c): c is NonNullable<typeof c> => c != null);
   },
 });
 
@@ -237,6 +275,8 @@ export const getById = query({
       conv.participantOneId === clerkId
         ? conv.participantTwoId
         : conv.participantOneId;
+
+    if (!otherClerkId) return null;
 
     const otherUser = await ctx.db
       .query("users")

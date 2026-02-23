@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 
 /** Check if a clerkId is a participant of a conversation */
 function isParticipant(
-  conv: { participantOneId: string; participantTwoId: string; isGroup?: boolean; participantIds?: string[] },
+  conv: { participantOneId?: string; participantTwoId?: string; isGroup?: boolean; participantIds?: string[] },
   clerkId: string,
 ) {
   if (conv.isGroup && conv.participantIds) {
@@ -67,8 +67,15 @@ export const deleteMessage = mutation({
     await ctx.db.patch(args.messageId, { deletedAt: Date.now() });
 
     // If this was the last message, update conversation preview
-    const conversation = await ctx.db.get(message.conversationId);
-    if (conversation && conversation.lastMessageText === message.text) {
+    const latestMessage = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", message.conversationId)
+      )
+      .order("desc")
+      .first();
+
+    if (latestMessage && latestMessage._id === args.messageId) {
       await ctx.db.patch(message.conversationId, {
         lastMessageText: "This message was deleted",
       });
