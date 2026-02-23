@@ -1,16 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-
-/** Check if a clerkId is a participant of a conversation */
-function isParticipant(
-  conv: { participantOneId?: string; participantTwoId?: string; isGroup?: boolean; participantIds?: string[] },
-  clerkId: string,
-) {
-  if (conv.isGroup && conv.participantIds) {
-    return conv.participantIds.includes(clerkId);
-  }
-  return conv.participantOneId === clerkId || conv.participantTwoId === clerkId;
-}
+import { isParticipant } from "./helpers";
 
 /**
  * Send a message in a conversation. Also updates the conversation's

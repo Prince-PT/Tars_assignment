@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { isParticipant } from "./helpers";
 
 /**
  * Get or create a 1-on-1 conversation between the authenticated user and another user.
@@ -93,22 +94,6 @@ export const createGroup = mutation({
     return convId;
   },
 });
-
-/** Helper: check if a clerkId is a participant of a conversation */
-function isParticipant(
-  conv: {
-    participantOneId?: string;
-    participantTwoId?: string;
-    isGroup?: boolean;
-    participantIds?: string[];
-  },
-  clerkId: string,
-) {
-  if (conv.isGroup && conv.participantIds) {
-    return conv.participantIds.includes(clerkId);
-  }
-  return conv.participantOneId === clerkId || conv.participantTwoId === clerkId;
-}
 
 /**
  * List all conversations for the authenticated user, most recent first.

@@ -6,16 +6,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { SmilePlus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-
-const EMOJI_MAP: Record<string, string> = {
-  thumbsup: "👍",
-  heart: "❤️",
-  laugh: "😂",
-  sad: "😢",
-  angry: "😠",
-};
-
-type EmojiKey = "thumbsup" | "heart" | "laugh" | "sad" | "angry";
+import { EMOJI_MAP, type EmojiKey } from "@/types/chat";
 
 interface ReactionBarProps {
   messageId: Id<"messages">;
@@ -79,7 +70,9 @@ export function ReactionBar({ messageId, reactions, isMe }: ReactionBarProps) {
           )}
           title={`${r.emoji} (${r.count})`}
         >
-          <span className="text-sm">{EMOJI_MAP[r.emoji] ?? r.emoji}</span>
+          <span className="text-sm">
+            {EMOJI_MAP[r.emoji as EmojiKey] ?? r.emoji}
+          </span>
           <span className="font-medium tabular-nums">{r.count}</span>
         </button>
       ))}

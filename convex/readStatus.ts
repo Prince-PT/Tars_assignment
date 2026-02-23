@@ -96,7 +96,7 @@ export const unreadCounts = query({
         .collect();
 
       const unread = unreadMessages.filter(
-        (m) => m.senderClerkId !== clerkId
+        (m) => m.senderClerkId !== clerkId && !m.deletedAt
       ).length;
 
       if (unread > 0) {

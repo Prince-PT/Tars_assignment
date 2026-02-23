@@ -12,6 +12,7 @@ import "../globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex-client-provider";
 import { SyncUserToConvex } from "@/components/sync-user-to-convex";
 import { PresenceProvider } from "@/components/presence-provider";
+import { ProfileSettings } from "@/components/profile-settings";
 import Link from "next/link";
 
 const geistSans = Geist({
@@ -69,6 +70,7 @@ export default function RootLayout({
                   </SignUpButton>
                 </SignedOut>
                 <SignedIn>
+                  <ProfileSettings />
                   <UserButton />
                 </SignedIn>
               </div>
