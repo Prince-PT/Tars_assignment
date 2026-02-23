@@ -4,24 +4,24 @@
  *  duplicating them in every mutation/query file.
  * ──────────────────────────────────────────────────── */
 
-/** Conversation shape required by the participant check */
-export type ConversationLike = {
-  participantOneId?: string;
-  participantTwoId?: string;
-  isGroup?: boolean;
-  participantIds?: string[];
-};
+import type { QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 /**
- * Check whether a given clerkId is a member of a conversation.
- * Works for both 1-on-1 and group conversations.
+ * Check whether a clerkId is a member of a conversation.
+ * Uses the compound by_conversation_member index for O(1) lookup.
+ * Works for both DMs and groups (unified via conversationMembers).
  */
-export function isParticipant(
-  conv: ConversationLike,
+export async function isMember(
+  ctx: Pick<QueryCtx, "db">,
+  conversationId: Id<"conversations">,
   clerkId: string,
-): boolean {
-  if (conv.isGroup && conv.participantIds) {
-    return conv.participantIds.includes(clerkId);
-  }
-  return conv.participantOneId === clerkId || conv.participantTwoId === clerkId;
+): Promise<boolean> {
+  const row = await ctx.db
+    .query("conversationMembers")
+    .withIndex("by_conversation_member", (q) =>
+      q.eq("conversationId", conversationId).eq("clerkId", clerkId),
+    )
+    .first();
+  return row !== null;
 }

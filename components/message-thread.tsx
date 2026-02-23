@@ -8,16 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Send,
-  MessageSquare,
-  Inbox,
-  ArrowLeft,
-  Trash2,
-  AlertCircle,
-  RotateCcw,
-  Users,
-} from "lucide-react";
+import { Send, MessageSquare, Inbox, ArrowLeft, Trash2, AlertCircle, RotateCcw, Users, ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, FormEvent } from "react";
 import { cn } from "@/lib/utils";
 import { OnlineIndicator } from "@/components/online-indicator";
@@ -60,6 +51,9 @@ export function MessageThread({
   const markRead = useMutation(api.readStatus.markRead);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isNearBottom = useRef(true);
+  const [showNewMsgBtn, setShowNewMsgBtn] = useState(false);
+  const prevMsgCount = useRef(0);
 
   // Reactions query — batched by all message ids in view
   const messageIds = messages?.map((m) => m._id) ?? [];
@@ -84,10 +78,53 @@ export function MessageThread({
     return otherUser.name;
   };
 
-  // Auto-scroll when new messages arrive or typing indicator appears
+  // Track whether the user is near the bottom via IntersectionObserver
   useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isNearBottom.current = entry.isIntersecting;
+        if (entry.isIntersecting) setShowNewMsgBtn(false);
+      },
+      { threshold: 0, rootMargin: "0px 0px 150px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Smart auto-scroll: only scroll down if user is near the bottom
+  useEffect(() => {
+    const count = messages?.length ?? 0;
+    if (count > prevMsgCount.current) {
+      if (isNearBottom.current) {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        setShowNewMsgBtn(true);
+      }
+    }
+    prevMsgCount.current = count;
+  }, [messages?.length]);
+
+  // Always scroll on typing indicator when near bottom
+  useEffect(() => {
+    if (isNearBottom.current && typingClerkIds.length > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [typingClerkIds.length]);
+
+  // Scroll to bottom on initial load / conversation switch
+  useEffect(() => {
+    prevMsgCount.current = 0;
+    setShowNewMsgBtn(false);
+    isNearBottom.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  }, [conversationId]);
+
+  const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages?.length, typingClerkIds.length]);
+    setShowNewMsgBtn(false);
+  }, []);
 
   // Mark conversation as read when opened or when new messages arrive
   useEffect(() => {
@@ -197,7 +234,7 @@ export function MessageThread({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0b141a]">
+    <div className="flex flex-col h-full bg-[#0b141a] relative">
       {/* Chat header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-[#313d45] bg-[#202c33]">
         {onBack && (
@@ -251,7 +288,7 @@ export function MessageThread({
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-3 py-1">
+      <ScrollArea className="flex-1 overflow-hidden px-3 py-1">
         {messages === undefined ? (
           /* Skeleton loaders while loading */
           <div className="space-y-4 py-4">
@@ -455,8 +492,21 @@ export function MessageThread({
 
         {/* Typing indicator */}
         {typingClerkIds.length > 0 && <TypingBubble name={otherUser.name} />}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-1 w-full" />
       </ScrollArea>
+
+      {/* New messages button */}
+      {showNewMsgBtn && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+          <button
+            onClick={scrollToBottom}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#202c33] text-[#e9edef] text-xs font-medium shadow-lg border border-[#313d45] hover:bg-[#2a3942] transition-colors"
+          >
+            <ArrowDown className="size-3.5" />
+            New messages
+          </button>
+        </div>
+      )}
 
       {/* Input */}
       <form
