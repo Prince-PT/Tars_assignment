@@ -54,7 +54,22 @@ export const unreadCounts = query({
       .withIndex("by_participantTwo", (q) => q.eq("participantTwoId", clerkId))
       .collect();
 
-    const allConvs = [...asP1, ...asP2];
+    // Group conversations: query all groups and filter by participantIds
+    const allGroups = await ctx.db
+      .query("conversations")
+      .withIndex("by_isGroup", (q) => q.eq("isGroup", true))
+      .collect();
+    const myGroups = allGroups.filter(
+      (c) => c.participantIds?.includes(clerkId)
+    );
+
+    // Deduplicate across all three sources
+    const seen = new Set<string>();
+    const allConvs = [...asP1, ...asP2, ...myGroups].filter((c) => {
+      if (seen.has(c._id)) return false;
+      seen.add(c._id);
+      return true;
+    });
 
     const counts: Record<string, number> = {};
 

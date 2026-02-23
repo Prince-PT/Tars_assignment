@@ -6,11 +6,15 @@ import { useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { ConversationSidebar } from "@/components/conversation-sidebar";
+import { ConversationSidebar, ConversationItem } from "@/components/conversation-sidebar";
 import { MessageThread, EmptyThread } from "@/components/message-thread";
 
 type ActiveConversation = {
   _id: Id<"conversations">;
+  isGroup?: boolean;
+  groupName?: string;
+  memberCount?: number;
+  members?: { clerkId: string; name: string; imageUrl?: string }[];
   otherUser: {
     clerkId: string;
     name: string;
@@ -48,11 +52,27 @@ function MessagesContent() {
 
   // Use manually selected conversation, or fall back to the one from the URL
   const active: ActiveConversation | null = manualActive
-    ?? (linkedConv ? { _id: linkedConv._id, otherUser: linkedConv.otherUser } : null);
+    ?? (linkedConv
+      ? {
+          _id: linkedConv._id,
+          otherUser: linkedConv.otherUser,
+          isGroup: linkedConv.isGroup,
+          groupName: "groupName" in linkedConv ? linkedConv.groupName : undefined,
+          memberCount: "memberCount" in linkedConv ? linkedConv.memberCount : undefined,
+          members: "members" in linkedConv ? linkedConv.members : undefined,
+        }
+      : null);
 
-  const handleSelect = (conv: ActiveConversation) => {
+  const handleSelect = (conv: ConversationItem) => {
     setDismissed(false);
-    setManualActive(conv);
+    setManualActive({
+      _id: conv._id,
+      otherUser: conv.otherUser,
+      isGroup: conv.isGroup,
+      groupName: conv.groupName,
+      memberCount: conv.memberCount,
+      members: conv.members,
+    });
   };
 
   return (
@@ -64,9 +84,7 @@ function MessagesContent() {
           <div className="h-full">
             <ConversationSidebar
               activeConversationId={null}
-              onSelect={(conv) =>
-                handleSelect({ _id: conv._id, otherUser: conv.otherUser })
-              }
+              onSelect={handleSelect}
             />
           </div>
         ) : (
@@ -75,6 +93,10 @@ function MessagesContent() {
             <MessageThread
               conversationId={active._id}
               otherUser={active.otherUser}
+              isGroup={active.isGroup}
+              groupName={active.groupName}
+              memberCount={active.memberCount}
+              members={active.members}
               onBack={() => { setManualActive(null); setDismissed(true); }}
             />
           </div>
@@ -82,14 +104,12 @@ function MessagesContent() {
       </div>
 
       {/* ── Desktop layout ── */}
-      <div className="hidden sm:flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border mx-4 mb-4 bg-background">
+      <div className="hidden sm:flex h-[calc(100vh-4rem)] overflow-hidden bg-background">
         {/* Sidebar */}
         <div className="w-80 shrink-0">
           <ConversationSidebar
             activeConversationId={active?._id ?? null}
-            onSelect={(conv) =>
-              handleSelect({ _id: conv._id, otherUser: conv.otherUser })
-            }
+            onSelect={handleSelect}
           />
         </div>
 
@@ -99,6 +119,10 @@ function MessagesContent() {
             <MessageThread
               conversationId={active._id}
               otherUser={active.otherUser}
+              isGroup={active.isGroup}
+              groupName={active.groupName}
+              memberCount={active.memberCount}
+              members={active.members}
             />
           ) : (
             <EmptyThread />

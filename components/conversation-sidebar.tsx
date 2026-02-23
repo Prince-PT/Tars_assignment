@@ -16,13 +16,24 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Plus, Search, MessageCircle, SearchX } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Plus, Search, MessageCircle, SearchX, Users, Check } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { OnlineIndicator } from "@/components/online-indicator";
 
-type ConversationItem = {
+export type ConversationItem = {
   _id: Id<"conversations">;
+  isGroup?: boolean;
+  groupName?: string;
+  memberCount?: number;
+  members?: { clerkId: string; name: string; imageUrl?: string }[];
   otherUser: {
     clerkId: string;
     name: string;
@@ -48,8 +59,12 @@ export function ConversationSidebar({
   );
   const allUsers = useQuery(api.users.getAllUsers);
   const getOrCreate = useMutation(api.conversations.getOrCreate);
+  const createGroup = useMutation(api.conversations.createGroup);
 
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const onlineUserIds = useQuery(api.presence.onlineUsers) ?? [];
   const unreadCounts = useQuery(
@@ -61,9 +76,13 @@ export function ConversationSidebar({
     user ? {} : "skip"
   ) ?? [];
 
-  const filteredConversations = conversations?.filter((c) =>
-    c.otherUser.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredConversations = conversations?.filter((c) => {
+    const q = search.toLowerCase();
+    if (c.isGroup && c.groupName) {
+      return c.groupName.toLowerCase().includes(q);
+    }
+    return c.otherUser.name.toLowerCase().includes(q);
+  });
 
   const otherUsers =
     allUsers?.filter((u) => u.clerkId !== user?.id) ?? [];
@@ -89,6 +108,47 @@ export function ConversationSidebar({
     setNewChatOpen(false);
   };
 
+  const handleCreateGroup = async () => {
+    if (!user || !groupName.trim() || selectedMembers.length < 2) return;
+    try {
+      const convId = await createGroup({
+        name: groupName.trim(),
+        memberClerkIds: selectedMembers,
+      });
+
+      // Find member names for the callback
+      const members = selectedMembers.map((id) => {
+        const u = otherUsers.find((u) => u.clerkId === id);
+        return { clerkId: id, name: u?.name ?? "Unknown", imageUrl: u?.imageUrl };
+      });
+
+      onSelect({
+        _id: convId,
+        isGroup: true,
+        groupName: groupName.trim(),
+        memberCount: selectedMembers.length + 1,
+        members,
+        otherUser: members[0],
+        lastMessageText: undefined,
+        lastMessageAt: undefined,
+      });
+
+      setNewGroupOpen(false);
+      setGroupName("");
+      setSelectedMembers([]);
+    } catch (err) {
+      console.error("Failed to create group:", err);
+    }
+  };
+
+  const toggleMember = (clerkId: string) => {
+    setSelectedMembers((prev) =>
+      prev.includes(clerkId)
+        ? prev.filter((id) => id !== clerkId)
+        : [...prev, clerkId]
+    );
+  };
+
   const formatTime = (ts?: number) => {
     if (!ts) return "";
     const d = new Date(ts);
@@ -108,14 +168,24 @@ export function ConversationSidebar({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Messages</h2>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          onClick={() => setNewChatOpen(true)}
-          title="New conversation"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setNewGroupOpen(true)}
+            title="New group chat"
+          >
+            <Users className="size-4" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setNewChatOpen(true)}
+            title="New conversation"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -134,8 +204,20 @@ export function ConversationSidebar({
       {/* Conversation list */}
       <ScrollArea className="flex-1">
         {conversations === undefined ? (
-          <div className="flex justify-center py-10">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+          /* Skeleton loaders */
+          <div className="px-2 pb-2 space-y-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-3">
+                <div className="size-10 rounded-full bg-muted animate-pulse shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex justify-between gap-2">
+                    <div className="h-3.5 w-24 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-10 rounded bg-muted animate-pulse" />
+                  </div>
+                  <div className="h-3 w-36 rounded bg-muted/70 animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredConversations && filteredConversations.length > 0 ? (
           <div className="px-2 pb-2">
@@ -150,25 +232,40 @@ export function ConversationSidebar({
                 )}
               >
                 <div className="relative">
-                  <Avatar className="size-10 shrink-0">
-                    <AvatarImage
-                      src={conv.otherUser.imageUrl}
-                      alt={conv.otherUser.name}
-                    />
-                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                      {conv.otherUser.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <OnlineIndicator
-                    online={onlineUserIds.includes(conv.otherUser.clerkId)}
-                    size="sm"
-                  />
+                  {conv.isGroup ? (
+                    <div className="size-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Users className="size-5 text-primary" />
+                    </div>
+                  ) : (
+                    <>
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarImage
+                          src={conv.otherUser.imageUrl}
+                          alt={conv.otherUser.name}
+                        />
+                        <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                          {conv.otherUser.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <OnlineIndicator
+                        online={onlineUserIds.includes(conv.otherUser.clerkId)}
+                        size="sm"
+                      />
+                    </>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium">
-                      {conv.otherUser.name}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {conv.isGroup ? conv.groupName : conv.otherUser.name}
+                      </p>
+                      {conv.isGroup && conv.memberCount && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {conv.memberCount} members
+                        </p>
+                      )}
+                    </div>
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {formatTime(conv.lastMessageAt)}
                     </span>
@@ -266,6 +363,84 @@ export function ConversationSidebar({
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* New group chat dialog */}
+      <Dialog
+        open={newGroupOpen}
+        onOpenChange={(open) => {
+          setNewGroupOpen(open);
+          if (!open) {
+            setGroupName("");
+            setSelectedMembers([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Group Chat</DialogTitle>
+            <DialogDescription>
+              Pick at least 2 members and give the group a name.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <Input
+              placeholder="Group name"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              autoFocus
+            />
+
+            <div>
+              <p className="text-sm font-medium mb-2">
+                Members ({selectedMembers.length} selected)
+              </p>
+              <ScrollArea className="h-56 border border-border rounded-lg">
+                <div className="p-2 space-y-1">
+                  {otherUsers.map((u) => {
+                    const selected = selectedMembers.includes(u.clerkId);
+                    return (
+                      <button
+                        key={u.clerkId}
+                        onClick={() => toggleMember(u.clerkId)}
+                        className={cn(
+                          "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
+                          selected
+                            ? "bg-primary/10 border border-primary/30"
+                            : "hover:bg-accent/50 border border-transparent",
+                        )}
+                      >
+                        <Avatar className="size-8">
+                          <AvatarImage src={u.imageUrl} alt={u.name} />
+                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                            {u.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{u.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                        </div>
+                        {selected && (
+                          <Check className="size-4 text-primary shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+
+            <Button
+              onClick={handleCreateGroup}
+              disabled={!groupName.trim() || selectedMembers.length < 2}
+              className="w-full"
+            >
+              <Users className="size-4 mr-2" />
+              Create Group ({selectedMembers.length + 1} members)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

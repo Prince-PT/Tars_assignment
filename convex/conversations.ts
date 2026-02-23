@@ -33,6 +33,52 @@ export const getOrCreate = mutation({
 });
 
 /**
+ * Create a group conversation with multiple members and a name.
+ */
+export const createGroup = mutation({
+  args: {
+    name: v.string(),
+    memberClerkIds: v.array(v.string()), // other members (current user auto-included)
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    if (args.name.trim().length === 0) throw new Error("Group name is required");
+    if (args.memberClerkIds.length < 2) throw new Error("Select at least 2 other members");
+
+    const myClerkId = identity.subject;
+    const allMembers = Array.from(
+      new Set([myClerkId, ...args.memberClerkIds])
+    ).sort();
+
+    return await ctx.db.insert("conversations", {
+      participantOneId: allMembers[0],
+      participantTwoId: allMembers[1],
+      isGroup: true,
+      groupName: args.name.trim(),
+      participantIds: allMembers,
+    });
+  },
+});
+
+/** Helper: check if a clerkId is a participant of a conversation */
+function isParticipant(
+  conv: {
+    participantOneId: string;
+    participantTwoId: string;
+    isGroup?: boolean;
+    participantIds?: string[];
+  },
+  clerkId: string,
+) {
+  if (conv.isGroup && conv.participantIds) {
+    return conv.participantIds.includes(clerkId);
+  }
+  return conv.participantOneId === clerkId || conv.participantTwoId === clerkId;
+}
+
+/**
  * List all conversations for the authenticated user, most recent first.
  */
 export const listForUser = query({
@@ -43,6 +89,7 @@ export const listForUser = query({
 
     const clerkId = identity.subject;
 
+    // 1-on-1 conversations: user appears as participantOneId or participantTwoId
     const asP1 = await ctx.db
       .query("conversations")
       .withIndex("by_participant", (q) =>
@@ -57,14 +104,60 @@ export const listForUser = query({
       )
       .collect();
 
-    const all = [...asP1, ...asP2];
+    // Group conversations: query all groups and filter by participantIds
+    const allGroups = await ctx.db
+      .query("conversations")
+      .withIndex("by_isGroup", (q) => q.eq("isGroup", true))
+      .collect();
+    const myGroups = allGroups.filter(
+      (c) => c.participantIds?.includes(clerkId)
+    );
+
+    // Deduplicate across all three sources
+    const seen = new Set<string>();
+    const all = [...asP1, ...asP2, ...myGroups].filter((c) => {
+      if (seen.has(c._id)) return false;
+      seen.add(c._id);
+      return true;
+    });
 
     // Sort by most recent message, conversations without messages go last.
     all.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
 
-    // Enrich with the other user's profile
+    // Enrich with user profiles
     const enriched = await Promise.all(
       all.map(async (conv) => {
+        if (conv.isGroup && conv.participantIds) {
+          // Group conversation
+          const members = await Promise.all(
+            conv.participantIds
+              .filter((id) => id !== clerkId)
+              .slice(0, 5) // limit lookups
+              .map(async (id) => {
+                const u = await ctx.db
+                  .query("users")
+                  .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
+                  .unique();
+                return u
+                  ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
+                  : { clerkId: id, name: "Unknown", imageUrl: undefined };
+              })
+          );
+
+          return {
+            _id: conv._id,
+            isGroup: true as const,
+            groupName: conv.groupName ?? "Group",
+            memberCount: conv.participantIds.length,
+            members,
+            // Keep otherUser for backward compat (first other member)
+            otherUser: members[0] ?? { clerkId: "", name: "Group", imageUrl: undefined },
+            lastMessageText: conv.lastMessageText,
+            lastMessageAt: conv.lastMessageAt,
+          };
+        }
+
+        // 1-on-1 conversation
         const otherClerkId =
           conv.participantOneId === clerkId
             ? conv.participantTwoId
@@ -77,6 +170,7 @@ export const listForUser = query({
 
         return {
           _id: conv._id,
+          isGroup: false as const,
           otherUser: otherUser
             ? {
                 clerkId: otherUser.clerkId,
@@ -107,11 +201,36 @@ export const getById = query({
     const conv = await ctx.db.get(args.conversationId);
     if (!conv) return null;
 
-    if (
-      conv.participantOneId !== clerkId &&
-      conv.participantTwoId !== clerkId
-    ) {
+    if (!isParticipant(conv, clerkId)) {
       throw new Error("Unauthorized");
+    }
+
+    if (conv.isGroup && conv.participantIds) {
+      const members = await Promise.all(
+        conv.participantIds
+          .filter((id) => id !== clerkId)
+          .slice(0, 5)
+          .map(async (id) => {
+            const u = await ctx.db
+              .query("users")
+              .withIndex("by_clerkId", (q) => q.eq("clerkId", id))
+              .unique();
+            return u
+              ? { clerkId: u.clerkId, name: u.name, imageUrl: u.imageUrl }
+              : { clerkId: id, name: "Unknown", imageUrl: undefined };
+          })
+      );
+
+      return {
+        _id: conv._id,
+        isGroup: true as const,
+        groupName: conv.groupName ?? "Group",
+        memberCount: conv.participantIds.length,
+        members,
+        otherUser: members[0] ?? { clerkId: "", name: "Group", imageUrl: undefined },
+        lastMessageText: conv.lastMessageText,
+        lastMessageAt: conv.lastMessageAt,
+      };
     }
 
     const otherClerkId =
@@ -126,6 +245,7 @@ export const getById = query({
 
     return {
       _id: conv._id,
+      isGroup: false as const,
       otherUser: otherUser
         ? {
             clerkId: otherUser.clerkId,

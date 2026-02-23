@@ -11,20 +11,26 @@ export default defineSchema({
   }).index("by_clerkId", ["clerkId"]),
 
   conversations: defineTable({
-    participantOneId: v.string(), // clerkId
-    participantTwoId: v.string(), // clerkId
+    participantOneId: v.string(), // clerkId (used for 1-on-1)
+    participantTwoId: v.string(), // clerkId (used for 1-on-1)
     lastMessageText: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
+    // ── Group chat fields ──
+    isGroup: v.optional(v.boolean()),
+    groupName: v.optional(v.string()),
+    participantIds: v.optional(v.array(v.string())), // all member clerkIds
   })
     .index("by_participant", ["participantOneId"])
     .index("by_participantTwo", ["participantTwoId"])
-    .index("by_pair", ["participantOneId", "participantTwoId"]),
+    .index("by_pair", ["participantOneId", "participantTwoId"])
+    .index("by_isGroup", ["isGroup"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
     senderClerkId: v.string(),
     text: v.string(),
     createdAt: v.number(),
+    deletedAt: v.optional(v.number()),
   }).index("by_conversation", ["conversationId", "createdAt"]),
 
   // ── Online presence ──
@@ -48,4 +54,19 @@ export default defineSchema({
     clerkId: v.string(),
     lastReadAt: v.number(),
   }).index("by_user_conversation", ["clerkId", "conversationId"]),
+
+  // ── Message reactions ──
+  reactions: defineTable({
+    messageId: v.id("messages"),
+    clerkId: v.string(),
+    emoji: v.union(
+      v.literal("thumbsup"),
+      v.literal("heart"),
+      v.literal("laugh"),
+      v.literal("sad"),
+      v.literal("angry"),
+    ),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_message_user", ["messageId", "clerkId"]),
 });
