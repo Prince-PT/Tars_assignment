@@ -8,26 +8,31 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageSquare, Inbox, ArrowLeft, Trash2, AlertCircle, RotateCcw, Users } from "lucide-react";
+import {
+  Send,
+  MessageSquare,
+  Inbox,
+  ArrowLeft,
+  Trash2,
+  AlertCircle,
+  RotateCcw,
+  Users,
+} from "lucide-react";
 import { useEffect, useRef, useState, useCallback, FormEvent } from "react";
 import { cn } from "@/lib/utils";
 import { OnlineIndicator } from "@/components/online-indicator";
 import { TypingBubble } from "@/components/typing-bubble";
 import { useTypingIndicator } from "@/hooks/use-typing-indicator";
 import { ReactionBar } from "@/components/reaction-bar";
+import type { ChatMember } from "@/types/chat";
 
 interface MessageThreadProps {
   conversationId: Id<"conversations">;
-  otherUser: {
-    clerkId: string;
-    name: string;
-    imageUrl?: string;
-  };
-  /** Group chat fields */
+  otherUser: ChatMember;
   isGroup?: boolean;
   groupName?: string;
   memberCount?: number;
-  members?: { clerkId: string; name: string; imageUrl?: string }[];
+  members?: ChatMember[];
   /** Called when the user taps back (mobile only) */
   onBack?: () => void;
 }
@@ -43,23 +48,26 @@ export function MessageThread({
 }: MessageThreadProps) {
   const { user } = useUser();
   const messages = useQuery(api.messages.list, { conversationId });
-  const otherOnline = useQuery(
-    api.presence.isOnline,
-    !isGroup ? { clerkId: otherUser.clerkId } : "skip",
-  ) ?? false;
+  const otherOnline =
+    useQuery(
+      api.presence.isOnline,
+      !isGroup ? { clerkId: otherUser.clerkId } : "skip",
+    ) ?? false;
   const sendMessage = useMutation(api.messages.send);
   const deleteMessage = useMutation(api.messages.deleteMessage);
-  const { onKeystroke, clearTyping, typingClerkIds } = useTypingIndicator(conversationId);
+  const { onKeystroke, clearTyping, typingClerkIds } =
+    useTypingIndicator(conversationId);
   const markRead = useMutation(api.readStatus.markRead);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Reactions query — batched by all message ids in view
   const messageIds = messages?.map((m) => m._id) ?? [];
-  const reactions = useQuery(
-    api.reactions.getForMessages,
-    messageIds.length > 0 ? { messageIds } : "skip",
-  ) ?? {};
+  const reactions =
+    useQuery(
+      api.reactions.getForMessages,
+      messageIds.length > 0 ? { messageIds } : "skip",
+    ) ?? {};
 
   // Failed messages for retry
   const [failedMessages, setFailedMessages] = useState<
@@ -133,7 +141,7 @@ export function MessageThread({
     setFailedMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<Id<"messages"> | null>(null);
 
   const handleDeleteMessage = useCallback(
     async (messageId: Id<"messages">) => {
@@ -143,7 +151,7 @@ export function MessageThread({
         await deleteMessage({ messageId });
       } catch {
         setDeleteError(messageId);
-        setTimeout(() => setDeleteError(null), 3000);
+        setTimeout(() => setDeleteError(null), 3_000);
       }
     },
     [deleteMessage],
@@ -209,7 +217,9 @@ export function MessageThread({
               <Users className="size-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-foreground leading-tight">{groupName ?? "Group"}</h3>
+              <h3 className="font-semibold text-foreground leading-tight">
+                {groupName ?? "Group"}
+              </h3>
               <p className="text-[11px] text-muted-foreground">
                 {memberCount ?? members?.length ?? 0} members
               </p>
@@ -227,9 +237,13 @@ export function MessageThread({
               <OnlineIndicator online={otherOnline} size="sm" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-foreground leading-tight">{otherUser.name}</h3>
+              <h3 className="font-semibold text-foreground leading-tight">
+                {otherUser.name}
+              </h3>
               {otherOnline && (
-                <p className="text-[11px] text-emerald-500 font-medium">Online</p>
+                <p className="text-[11px] text-emerald-500 font-medium">
+                  Online
+                </p>
               )}
             </div>
           </>
@@ -275,7 +289,8 @@ export function MessageThread({
                 No messages yet
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Send a message to start your conversation{isGroup ? "" : ` with ${otherUser.name}`}
+                Send a message to start your conversation
+                {isGroup ? "" : ` with ${otherUser.name}`}
               </p>
             </div>
           </div>
@@ -297,7 +312,9 @@ export function MessageThread({
               return (
                 <div
                   key={msg._id}
-                  className={cn(i > 0 && (sameSenderAsPrev ? "mt-0.5" : "mt-2.5"))}
+                  className={cn(
+                    i > 0 && (sameSenderAsPrev ? "mt-0.5" : "mt-2.5"),
+                  )}
                 >
                   {/* Date separator */}
                   {shouldShowDateSeparator(i) && (
@@ -338,22 +355,33 @@ export function MessageThread({
                             : isMe
                               ? "bg-[#005c4b] text-[#e9edef]"
                               : "bg-[#1f2c34] text-[#e9edef]",
-                          !isDeleted && !sameSenderAsPrev && isMe && "rounded-tr-[3px]",
-                          !isDeleted && !sameSenderAsPrev && !isMe && "rounded-tl-[3px]",
+                          !isDeleted &&
+                            !sameSenderAsPrev &&
+                            isMe &&
+                            "rounded-tr-[3px]",
+                          !isDeleted &&
+                            !sameSenderAsPrev &&
+                            !isMe &&
+                            "rounded-tl-[3px]",
                         )}
                       >
                         {/* Sender name in group chats */}
-                        {isGroup && !isMe && !isDeleted && !sameSenderAsPrev && (
-                          <p className="text-[12.8px] font-medium text-primary mb-0.5">
-                            {getSenderName(msg.senderClerkId)}
-                          </p>
-                        )}
+                        {isGroup &&
+                          !isMe &&
+                          !isDeleted &&
+                          !sameSenderAsPrev && (
+                            <p className="text-[12.8px] font-medium text-primary mb-0.5">
+                              {getSenderName(msg.senderClerkId)}
+                            </p>
+                          )}
                         {isDeleted ? (
                           <p className="italic text-muted-foreground text-[13px]">
                             This message was deleted
                           </p>
                         ) : (
-                          <p className="whitespace-pre-wrap wrap-break-word">{msg.text}</p>
+                          <p className="whitespace-pre-wrap wrap-break-word">
+                            {msg.text}
+                          </p>
                         )}
                         <p
                           className={cn(
@@ -376,7 +404,8 @@ export function MessageThread({
                             "-mt-0.5",
                             isMe ? "flex justify-end" : "flex justify-start",
                             // Hide the entire bar when empty, show on hover
-                            !hasReactions && "opacity-0 group-hover/msg:opacity-100 transition-opacity",
+                            !hasReactions &&
+                              "opacity-0 group-hover/msg:opacity-100 transition-opacity",
                           )}
                         >
                           <ReactionBar
@@ -425,9 +454,7 @@ export function MessageThread({
         ))}
 
         {/* Typing indicator */}
-        {typingClerkIds.length > 0 && (
-          <TypingBubble name={otherUser.name} />
-        )}
+        {typingClerkIds.length > 0 && <TypingBubble name={otherUser.name} />}
         <div ref={bottomRef} />
       </ScrollArea>
 
@@ -466,9 +493,12 @@ export function EmptyThread() {
         <Inbox className="size-12 text-muted-foreground/50" />
       </div>
       <div>
-        <p className="text-lg font-semibold text-foreground">No conversation selected</p>
+        <p className="text-lg font-semibold text-foreground">
+          No conversation selected
+        </p>
         <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-          Pick a conversation from the sidebar or start a new one to begin messaging.
+          Pick a conversation from the sidebar or start a new one to begin
+          messaging.
         </p>
       </div>
     </div>

@@ -23,25 +23,18 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Search, MessageCircle, SearchX, Users, Check } from "lucide-react";
+import {
+  Plus,
+  Search,
+  MessageCircle,
+  SearchX,
+  Users,
+  Check,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { OnlineIndicator } from "@/components/online-indicator";
-
-export type ConversationItem = {
-  _id: Id<"conversations">;
-  isGroup?: boolean;
-  groupName?: string;
-  memberCount?: number;
-  members?: { clerkId: string; name: string; imageUrl?: string }[];
-  otherUser: {
-    clerkId: string;
-    name: string;
-    imageUrl?: string;
-  };
-  lastMessageText?: string;
-  lastMessageAt?: number;
-};
+import type { ConversationItem } from "@/types/chat";
 
 interface ConversationSidebarProps {
   activeConversationId: Id<"conversations"> | null;
@@ -55,7 +48,7 @@ export function ConversationSidebar({
   const { user } = useUser();
   const conversations = useQuery(
     api.conversations.listForUser,
-    user ? {} : "skip"
+    user ? {} : "skip",
   );
   const allUsers = useQuery(api.users.getAllUsers);
   const getOrCreate = useMutation(api.conversations.getOrCreate);
@@ -67,14 +60,10 @@ export function ConversationSidebar({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const onlineUserIds = useQuery(api.presence.onlineUsers) ?? [];
-  const unreadCounts = useQuery(
-    api.readStatus.unreadCounts,
-    user ? {} : "skip"
-  ) ?? {};
-  const typingConvIds = useQuery(
-    api.typing.typingConversations,
-    user ? {} : "skip"
-  ) ?? [];
+  const unreadCounts =
+    useQuery(api.readStatus.unreadCounts, user ? {} : "skip") ?? {};
+  const typingConvIds =
+    useQuery(api.typing.typingConversations, user ? {} : "skip") ?? [];
 
   const filteredConversations = conversations?.filter((c) => {
     const q = search.toLowerCase();
@@ -84,8 +73,7 @@ export function ConversationSidebar({
     return c.otherUser.name.toLowerCase().includes(q);
   });
 
-  const otherUsers =
-    allUsers?.filter((u) => u.clerkId !== user?.id) ?? [];
+  const otherUsers = allUsers?.filter((u) => u.clerkId !== user?.id) ?? [];
 
   const handleStartChat = async (otherClerkId: string) => {
     if (!user) return;
@@ -118,8 +106,12 @@ export function ConversationSidebar({
 
       // Find member names for the callback
       const members = selectedMembers.map((id) => {
-        const u = otherUsers.find((u) => u.clerkId === id);
-        return { clerkId: id, name: u?.name ?? "Unknown", imageUrl: u?.imageUrl };
+        const found = otherUsers.find((ou) => ou.clerkId === id);
+        return {
+          clerkId: id,
+          name: found?.name ?? "Unknown",
+          imageUrl: found?.imageUrl,
+        };
       });
 
       onSelect({
@@ -145,16 +137,15 @@ export function ConversationSidebar({
     setSelectedMembers((prev) =>
       prev.includes(clerkId)
         ? prev.filter((id) => id !== clerkId)
-        : [...prev, clerkId]
+        : [...prev, clerkId],
     );
   };
 
-  const formatTime = (ts?: number) => {
+  const formatTime = (ts?: number): string => {
     if (!ts) return "";
     const d = new Date(ts);
     const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) {
+    if (d.toDateString() === now.toDateString()) {
       return d.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
@@ -207,7 +198,10 @@ export function ConversationSidebar({
           /* Skeleton loaders */
           <div className="px-2 pb-2 space-y-1">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-3">
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-lg px-3 py-3"
+              >
                 <div className="size-10 rounded-full bg-[#2a3942] animate-pulse shrink-0" />
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex justify-between gap-2">
@@ -227,8 +221,7 @@ export function ConversationSidebar({
                 onClick={() => onSelect(conv as ConversationItem)}
                 className={cn(
                   "w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[#2a3942]",
-                  activeConversationId === conv._id &&
-                    "bg-[#2a3942]"
+                  activeConversationId === conv._id && "bg-[#2a3942]",
                 )}
               >
                 <div className="relative">
@@ -288,7 +281,9 @@ export function ConversationSidebar({
                 {/* Unread badge */}
                 {unreadCounts[conv._id] ? (
                   <span className="shrink-0 flex items-center justify-center min-w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1.5">
-                    {unreadCounts[conv._id] > 99 ? "99+" : unreadCounts[conv._id]}
+                    {unreadCounts[conv._id] > 99
+                      ? "99+"
+                      : unreadCounts[conv._id]}
                   </span>
                 ) : null}
               </button>
@@ -417,8 +412,12 @@ export function ConversationSidebar({
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{u.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                          <p className="truncate text-sm font-medium">
+                            {u.name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {u.email}
+                          </p>
                         </div>
                         {selected && (
                           <Check className="size-4 text-primary shrink-0" />

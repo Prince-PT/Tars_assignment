@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
@@ -45,6 +45,18 @@ export function DiscoverUsers() {
 
   const otherUsers = users?.filter((u) => u.clerkId !== currentUser?.id) ?? [];
 
+  // ⌘K / Ctrl+K to toggle the search dialog
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleSendMessage = async (otherClerkId: string) => {
     if (!currentUser) return;
     const convId = await getOrCreate({
@@ -64,8 +76,14 @@ export function DiscoverUsers() {
       >
         <Search className="size-4" />
         <span>Search people...</span>
-        <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
-          ⌘K
+        <kbd className="pointer-events-none ml-auto inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+          <span className="text-xs">
+            {typeof navigator !== "undefined" &&
+            /Mac|iPhone|iPad/.test(navigator.userAgent)
+              ? "⌘"
+              : "Ctrl+"}
+          </span>
+          K
         </kbd>
       </Button>
 
