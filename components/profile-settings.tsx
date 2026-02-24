@@ -114,6 +114,15 @@ export function ProfileSettings() {
         removeAvatar,
       });
 
+      // Sync avatar change to Clerk so <UserButton> reflects it
+      if (clerkUser) {
+        if (selectedFile) {
+          await clerkUser.setProfileImage({ file: selectedFile });
+        } else if (removeAvatar) {
+          await clerkUser.setProfileImage({ file: null });
+        }
+      }
+
       setOpen(false);
     } catch (err) {
       console.error("Profile update failed:", err);
