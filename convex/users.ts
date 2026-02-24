@@ -78,10 +78,15 @@ export const upsertUser = mutation({
       .unique();
 
     if (existing) {
+      // Only update imageUrl if the user doesn't already have a custom
+      // Convex-stored avatar (i.e. one that isn't a Clerk URL).
+      const hasCustomAvatar =
+        existing.imageUrl && !existing.imageUrl.includes("clerk");
+
       await ctx.db.patch(existing._id, {
         email: args.email,
         name: args.name,
-        imageUrl: args.imageUrl,
+        ...(hasCustomAvatar ? {} : { imageUrl: args.imageUrl }),
       });
       return existing._id;
     }
