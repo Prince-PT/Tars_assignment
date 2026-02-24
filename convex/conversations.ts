@@ -22,7 +22,7 @@ export const getOrCreate = mutation({
       .withIndex("by_pair", (q) =>
         q.eq("participantOneId", p1).eq("participantTwoId", p2)
       )
-      .unique();
+      .first();
 
     if (existing) {
       // Ensure membership rows exist (guards against pre-migration DMs)
